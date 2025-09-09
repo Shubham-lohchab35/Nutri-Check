@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nutri-check</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #ff0000, #ff9900, #ffff00);
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      padding: 1rem;
+      text-align: center;
+    }
+    main {
+      max-width: 600px;
+      margin: 2rem auto;
+      background: #fff;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    label {
+      font-weight: bold;
+      margin-top: 1rem;
+      display: block;
+    }
+    input, select, button, textarea {
+      width: 100%;
+      padding: 0.6rem;
+      margin-top: 0.5rem;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+    }
+    button {
+      background: linear-gradient(90deg, #ff0000, #ff9900, #ffff00);
+      color: #000;
+      cursor: pointer;
+      font-weight: bold;
+      border: none;
+      transition: transform 0.2s;
+      margin-top: 1.5rem;
+    }
+    button:hover {
+      transform: scale(1.05);
+    }
+    #result {
+      margin-top: 2rem;
+      padding: 1rem;
+      border-radius: 8px;
+      background: #fff7f0;
+      border: 1px solid #ffcc80;
+    }
+    .healthy {
+      color: green;
+      font-weight: bold;
+    }
+    .not-healthy {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Nutri-check</h1>
+    <p>Check if your food is healthy for your condition</p>
+  </header>
+  <main>
+    <form id="foodForm">
+      <label for="foodName">Food Name *</label>
+      <input type="text" id="foodName" required>
+
+      <label for="quantity">Quantity *</label>
+      <input type="number" id="quantity" required>
+
+      <label for="unit">Unit *</label>
+      <select id="unit" required>
+        <option value="gram">Grams</option>
+        <option value="ml">Milliliters</option>
+        <option value="cup">Cup</option>
+        <option value="piece">Piece</option>
+        <option value="oz">Ounces</option>
+      </select>
+
+      <label for="condition">Health Condition *</label>
+      <select id="condition" required>
+        <option value="normal">Normal</option>
+        <option value="diabetes">Diabetes</option>
+        <option value="hypertension">Hypertension</option>
+        <option value="cholesterol">High Cholesterol</option>
+        <option value="kidney">Kidney Disease</option>
+        <option value="celiac">Celiac</option>
+        <option value="liver">Liver Disease</option>
+      </select>
+
+      <label for="allergies">Allergies (Optional)</label>
+      <input type="text" id="allergies">
+
+      <label for="preference">Dietary Preference (Optional)</label>
+      <select id="preference">
+        <option value="none">None</option>
+        <option value="vegetarian">Vegetarian</option>
+        <option value="vegan">Vegan</option>
+        <option value="non-veg">Non-Vegetarian</option>
+      </select>
+
+      <label for="restrictions">Food Restrictions (Optional)</label>
+      <textarea id="restrictions"></textarea>
+
+      <button type="submit">Check Healthiness</button>
+    </form>
+
+    <div id="result"></div>
+  </main>
+
+  <script>
+    const APP_ID = "58b21cd6";
+    const APP_KEY = "19d61a8074f64b75148780fdeaaef55e";
+
+    document.getElementById("foodForm").addEventListener("submit", async function(e) {
+      e.preventDefault();
+      const foodName = document.getElementById("foodName").value;
+      const quantity = document.getElementById("quantity").value;
+      const unit = document.getElementById("unit").value;
+      const condition = document.getElementById("condition").value;
+      const allergies = document.getElementById("allergies").value;
+      const preference = document.getElementById("preference").value;
+      const restrictions = document.getElementById("restrictions").value;
+
+      const query = `${quantity} ${unit} ${foodName}`;
+
+      const res = await fetch("https://trackapi.nutritionix.com/v2/natural/nutrients", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-app-id": APP_ID,
+          "x-app-key": APP_KEY
+        },
+        body: JSON.stringify({ query })
+      });
+
+      const data = await res.json();
+      const food = data.foods[0];
+
+      const calories = food.nf_calories;
+      const protein = food.nf_protein;
+      const fat = food.nf_total_fat;
+      const fiber = food.nf_dietary_fiber;
+      const sugar = food.nf_sugars;
+      const sodium = food.nf_sodium;
+
+      let healthy = true;
+      let reason = "Looks fine.";
+
+      if(condition === "diabetes" && sugar > 15) {
+        healthy = false;
+        reason = "Too much sugar for diabetes.";
+      } else if(condition === "hypertension" && sodium > 500) {
+        healthy = false;
+        reason = "High sodium not good for hypertension.";
+      } else if(condition === "cholesterol" && fat > 15) {
+        healthy = false;
+        reason = "Too much fat for high cholesterol.";
+      } else if(condition === "kidney" && protein > 20) {
+        healthy = false;
+        reason = "High protein not good for kidney disease.";
+      } else if(condition === "celiac" && food.food_name.toLowerCase().includes("wheat")) {
+        healthy = false;
+        reason = "Contains gluten not suitable for celiac.";
+      } else if(condition === "liver" && fat > 10) {
+        healthy = false;
+        reason = "High fat not suitable for liver disease.";
+      }
+
+      if(allergies && food.food_name.toLowerCase().includes(allergies.toLowerCase())) {
+        healthy = false;
+        reason = "Contains allergens.";
+      }
+
+      if(preference === "vegetarian" && food.food_name.toLowerCase().includes("chicken")) {
+        healthy = false;
+        reason = "Not vegetarian.";
+      } else if(preference === "vegan" && (food.food_name.toLowerCase().includes("milk") || food.food_name.toLowerCase().includes("egg"))) {
+        healthy = false;
+        reason = "Not vegan.";
+      }
+
+      if(restrictions && food.food_name.toLowerCase().includes(restrictions.toLowerCase())) {
+        healthy = false;
+        reason = "Violates food restriction.";
+      }
+
+      document.getElementById("result").innerHTML = `
+        <p class="${healthy ? 'healthy' : 'not-healthy'}">${healthy ? 'Healthy' : 'Not Healthy'}</p>
+        <p>Calories: ${calories} kcal</p>
+        <p>Protein: ${protein} g</p>
+        <p>Fat: ${fat} g</p>
+        <p>Fiber: ${fiber} g</p>
+        <p>Sugar: ${sugar} g</p>
+        <p>Sodium: ${sodium} mg</p>
+        <p><strong>Reason:</strong> ${reason}</p>
+      `;
+    });
+  </script>
+</body>
+</html>
