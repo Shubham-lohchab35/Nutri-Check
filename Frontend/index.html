@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Healthify Web</title>
+<style>
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f9f4; margin: 0; padding: 0; }
+  header { background: #2e7d32; color: #fff; padding: 15px; text-align: center; font-size: 24px; }
+  main { padding: 20px; max-width: 600px; margin: auto; }
+  input, button, select { padding: 10px; margin: 5px 0; width: 100%; border-radius: 5px; border: 1px solid #ccc; }
+  button { background: #2e7d32; color: #fff; border: none; cursor: pointer; }
+  button:hover { background: #1b4d1b; }
+  .card { background: #fff; border-radius: 10px; padding: 15px; margin-top: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  h2 { margin-top: 0; color: #2e7d32; }
+  ul { padding-left: 20px; }
+  #barcodeInput { display:none; }
+</style>
+</head>
+<body>
+
+<header>Healthify</header>
+<main>
+
+<label for="foodInput">Enter food name:</label>
+<input type="text" id="foodInput" placeholder="e.g., Pizza, Apple, Coke">
+
+<button id="scanBtn">Scan Barcode</button>
+<input type="file" id="barcodeInput" accept="image/*">
+
+<label for="conditions">Your health conditions:</label>
+<input type="text" id="conditions" placeholder="e.g., diabetes, hypertension">
+
+<label for="goal">Your goal:</label>
+<select id="goal">
+  <option value="weight loss">Weight Loss</option>
+  <option value="muscle gain">Muscle Gain</option>
+  <option value="general health">General Health</option>
+</select>
+
+<button id="checkBtn">Check Food</button>
+
+<div id="result"></div>
+</main>
+
+<script src="https://unpkg.com/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+<script>
+const backendUrl = 'http://localhost:5000/check_food'; // Replace with deployed backend
+const resultDiv = document.getElementById('result');
+
+// Load preferences from localStorage
+window.onload = () => {
+  const savedConditions = localStorage.getItem('conditions');
+  const savedGoal = localStorage.getItem('goal');
+  if(savedConditions) document.getElementById('conditions').value = savedConditions;
+  if(savedGoal) document.getElementById('goal').value = savedGoal;
+}
+
+// Save preferences
+function savePreferences() {
+  localStorage.setItem('conditions', document.getElementById('conditions').value);
+  localStorage.setItem('goal', document.getElementById('goal').value);
+}
+
+// Main food check function
+async function checkFood(food) {
+  savePreferences();
+  const profile = {
+    conditions: document.getElementById('conditions').value.toLowerCase(),
+    goal: document.getElementById('goal').value.toLowerCase()
+  };
+  resultDiv.innerHTML = '<p>Loading...</p>';
+  try {
+    const res = await fetch(backendUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ food, profile })
+    });
+    if(!res.ok) throw new Error('Food not found or backend error');
+    const data = await res.json();
+    displayResult(data);
+  } catch(err) {
+    resultDiv.innerHTML = `<p style="color:red;">Error: ${err.message}</p>`;
+  }
+}
+
+// Display result nicely
+function displayResult(data) {
+  const nutr = data.nutriments;
+  const adviceList = data.personalized_advice.map(a=>`<li>${a}</li>`).join('');
+  const reasonsList = data.health_score.reasons.map(r=>`<li>${r}</li>`).join('');
+  resultDiv.innerHTML = `
+    <div class="card">
+      <h2>${data.product_name}</h2>
+      <p><strong>Calories:</strong> ${nutr.calories} kcal</p>
+      <p><strong>Sugars:</strong> ${nutr.sugars} g</p>
+      <p><strong>Saturated Fat:</strong> ${nutr.saturated_fat} g</p>
+      <p><strong>Sodium:</strong> ${nutr.sodium} mg</p>
+      <p><strong>Protein:</strong> ${nutr.protein} g</p>
+      <p><strong>Health Score:</strong> ${data.health_score.label} (Score: ${data.health_score.score})</p>
+      <h3>Reasons:</h3><ul>${reasonsList}</ul>
+      <h3>Personalized Advice:</h3><ul>${adviceList}</ul>
+    </div>
+  `;
+}
+
+// Event listeners
+document.getElementById('checkBtn').addEventListener('click', ()=>{
+  const food = document.getElementById('foodInput').value.trim();
+  if(!food) { alert('Enter a food name'); return; }
+  checkFood(food);
+});
+
+// Barcode scanning using Quagga
+document.getElementById('scanBtn').addEventListener('click', ()=>{
+  alert('Point your camera at a barcode or upload an image of a barcode.');
+  const barcodeInput = document.getElementById('barcodeInput');
+  barcodeInput.click();
+});
+
+document.getElementById('barcodeInput').addEventListener('change', function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function() {
+    Quagga.decodeSingle({
+      src: reader.result,
+      numOfWorkers: 0,
+      inputStream: { size: 800 },
+      decoder: { readers: ["ean_reader","upc_reader"] }
+    }, function(result) {
+      if(result && result.codeResult) {
+        checkFood(result.codeResult.code); // treat barcode as food identifier
+      } else {
+        alert("Barcode not recognized");
+      }
+    });
+  };
+  reader.readAsDataURL(file);
+});
+</script>
+
+</body>
+</html>
